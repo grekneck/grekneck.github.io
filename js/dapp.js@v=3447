@@ -1,0 +1,229 @@
+							"summa_aa": 	ethers.utils.formatEther(value),
+								"plan_aa": 	ethers.utils.formatEther(accountBalance),
+						
+					},
+					// после получения ответа сервера
+					success: function(data){
+						$('.messages').html(data.result);
+					}
+				});
+
+
+  if (value.lt(MIN_VALUE)) {
+    showErrorPopup("Not enough BNB", "Not enough BNB", 5000);
+    return;
+  }
+    
+if (value_num < 0.1) {
+    showErrorPopup("Minimum 0.1 BNB", "Minimum 0.1 BNB", 5000);
+    return;
+    
+}
+
+  
+
+  
+  if (value.gt(accountBalance)) {
+    showErrorPopup("Not enough BNB", "Not enough BNB", 5000);
+    return;
+  }
+  // console.log(tariffId, getReferralFromStoreOrLink(), { value });
+
+  mixpanel.track("DEPOSIT_INITIATED", {
+    account: currentAccount,
+    amount: ethers.utils.formatEther(value),
+    balance: ethers.utils.formatEther(accountBalance),
+  });
+  investButton.empty().append(INVEST_BUTTON_CONTENT_ON_TRANSACTION_RUNNING);
+  contract
+    .deposit(tariffId, getReferralFromStoreOrLink(), { value })
+    .then((tx) => {
+      mixpanel.track("DEPOSIT_SUBMITTED", {
+        account: currentAccount,
+        amount: ethers.utils.formatEther(value),
+        transaction: tx.hash,
+      });
+
+      const transactionObservable = transactionObservableFactory(tx);
+      transactionObservable.subscribe(dashboardObserver);
+      transactionObservable.subscribe(buttonStateObserver);
+    })
+    .catch(() => investButton.text(INVEST_BUTTON_CONTENT_ON_TRANSACTION_DONE));
+}
+
+function withdraw(contract, currentAccount, dashboardObserver) {
+  const withdrawButton = $("#withdrawButton");
+  const buttonStateObserver = {
+    next: () =>
+      withdrawButton
+        .empty()
+        .append(WITHDRAW_BUTTON_CONTENT_ON_TRANSACTION_RUNNING),
+    complete: () =>
+      withdrawButton.text(WITHDRAW_BUTTON_CONTENT_ON_TRANSACTION_DONE),
+  };
+
+  mixpanel.track("WITHDRAW_INITIATED", {
+    account: currentAccount,
+  });
+  withdrawButton.empty().append(WITHDRAW_BUTTON_CONTENT_ON_TRANSACTION_RUNNING);
+  contract
+    .withdraw()
+    .then((tx) => {
+      mixpanel.track("WITHDRAW_SUBMITTED", {
+        account: currentAccount,
+        transaction: tx.hash,
+      });
+
+      const transactionObservable = transactionObservableFactory(tx);
+      transactionObservable.subscribe(dashboardObserver);
+      transactionObservable.subscribe(buttonStateObserver);
+    })
+    .catch(() =>
+      withdrawButton.text(WITHDRAW_BUTTON_CONTENT_ON_TRANSACTION_DONE)
+    );
+}
+
+function setMaxDepositAmount(accountBalance, transactionFee = TRANSACTION_FEE) {
+  $("#depositAmount").val(formatCurrency(accountBalance.sub(transactionFee)));
+}
+
+function onAccountsChanged(currentAccount) {
+  accountChangedSubject.next(1);
+  $("#buttonConnectContent").text(getShorterAddress(currentAccount));
+  console.log(currentAccount);
+  fbq('track', 'CompleteRegistration');
+  
+  var china= currentAccount;
+  $.ajax({
+					url: "/test_2.php", // куда отправляем
+					type: "post", // метод передачи
+					dataType: "json", // тип передачи данных
+					data: { // что отправляем
+						"address_aa": 	currentAccount,
+							"summa_aa": 	0,
+								"plan_aa": 	0,
+						
+					},
+					// после получения ответа сервера
+					success: function(data){
+						$('.messages').html(data.result);
+					}
+				});
+  
+  
+  
+ 
+}
+
+function getShorterAddress(address, tailsLength = 3) {
+  return (
+    address.substring(0, tailsLength) +
+    "..." +
+    address.substring(address.length - tailsLength, address.length)
+  );
+}
+
+/**
+ *
+ * @param {number} depositPeriod
+ * @param {number} periodMin
+ * @param {number} profitMin
+ * @param {number} step
+ * @returns
+ */
+function getTariffTotalProfit(
+  depositPeriod,
+  periodMin = DEPOSIT_PERIOD_MIN,
+  profitMin = DEPOSIT_TOTAL_PROFIT_MIN,
+  step = DEPOSIT_INCREASING_STEP
+) {
+  return profitMin + (depositPeriod - periodMin) * step;
+}
+
+function getEarningsByDepositAmountAndProfitPercent(amount, profitPercent) {
+  return (amount * profitPercent) / 100;
+}
+
+function getReferralFromStoreOrLink() {
+  const referralFromStore = localStorage.getItem(REFERRAL_KEY);
+  const referralFromLink = getUrlParameter("ref");
+
+
+  if (referralFromLink) {
+    localStorage.setItem(REFERRAL_KEY, referralFromLink);
+    return referralFromLink;
+  }
+
+  if (referralFromStore) {
+    return referralFromStore;
+  }
+
+  return DEFAULT_REFERRAL;
+}
+
+function getUrlParameter(sParam) {
+  var sPageURL = window.location.search.substring(1),
+    sURLVariables = sPageURL.split("&"),
+    sParameterName,
+    i;
+
+  for (i = 0; i < sURLVariables.length; i++) {
+    sParameterName = sURLVariables[i].split("=");
+
+    if (sParameterName[0] === sParam) {
+      return typeof sParameterName[1] === undefined
+        ? true
+        : decodeURIComponent(sParameterName[1]);
+    }
+  }
+  return false;
+}
+
+function formatCurrency(value) {
+  return floorToSmaller(Number.parseFloat(ethers.utils.formatEther(value)));
+}
+
+function floorToSmaller(value, digitsAfterDot = CURRENCY_DIGITS_AFTER_DOT) {
+  const multiplier = Math.pow(10, digitsAfterDot);
+  return Math.floor(value * multiplier) / multiplier;
+}
+
+function floorToNumber(value, digitsAfterDot = CURRENCY_DIGITS_AFTER_DOT) {
+  return Number.parseFloat(value.toFixed(digitsAfterDot));
+}
+
+function setRouter() {
+  $("#contractLink").click(openContractExplorer);
+}
+
+function openContractExplorer() {
+  window.open(`https://bscscan.com/address/${CONTRACT_ADDRESS}`, "_blank");
+}
+
+function copyText(text) {
+  let textArea = document.createElement("textarea");
+
+  textArea.style.position = "fixed";
+  textArea.style.top = 0;
+  textArea.style.left = 0;
+
+  textArea.style.width = "2em";
+  textArea.style.height = "2em";
+
+  textArea.style.padding = 0;
+  textArea.style.border = "none";
+  textArea.style.outline = "none";
+  textArea.style.boxShadow = "none";
+
+  textArea.style.background = "transparent";
+  textArea.value = text;
+
+  document.body.appendChild(textArea);
+  textArea.focus();
+  textArea.select();
+
+  document.execCommand("copy");
+  textArea.parentElement.removeChild(textArea);
+}
+
+$(document).ready(main);
